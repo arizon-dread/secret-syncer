@@ -114,7 +114,9 @@ func doSecretMapping(secretJSON string, ssSecret models.SecretServerSecret, kSec
 					_, err = clientSet.CoreV1().Secrets(namespace).Update(context.TODO(), kSecret, metav1.UpdateOptions{})
 					if err != nil {
 						log.Printf("error updating secret %v, err. %v", kubeSecret.KubernetesSecretName, err)
+						return
 					}
+					log.Printf("updated secret %v successfully", kubeSecret.KubernetesSecretName)
 				}
 			}
 		}
