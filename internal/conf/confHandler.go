@@ -25,7 +25,6 @@ func GetConfig() (*models.Config, error) {
 			configPath = "./conf"
 		}
 		v := viper.New()
-
 		v.SetConfigName("config")
 		v.AddConfigPath(configPath)
 		err := v.ReadInConfig()

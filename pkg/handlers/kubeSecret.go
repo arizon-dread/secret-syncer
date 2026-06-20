@@ -76,7 +76,7 @@ func updateKubeSecret(kubeSecret confModels.KubeSecret, ch chan models.Result, w
 		}
 	}
 
-	for _, s := range kubeSecret.SecretServerSecret {
+	for _, s := range kubeSecret.SecretServerEntry {
 
 		secretJSON, err := getSecretServerSecret(s)
 		if err != nil {
@@ -88,7 +88,7 @@ func updateKubeSecret(kubeSecret confModels.KubeSecret, ch chan models.Result, w
 	}
 }
 
-func getSecretServerSecret(ssSecret confModels.SecretServerSecret) (string, error) {
+func getSecretServerSecret(ssSecret confModels.SecretServerEntry) (string, error) {
 	token, err := getToken(ssSecret)
 	if err != nil {
 		log.Printf("failed to get token from SecretServer, %v", err)
@@ -114,7 +114,7 @@ func getSecretServerSecret(ssSecret confModels.SecretServerSecret) (string, erro
 	return string(body), nil
 }
 
-func doSecretMapping(secretJSON string, ssSecret confModels.SecretServerSecret, kSecret *v1.Secret, kubeSecret confModels.KubeSecret) {
+func doSecretMapping(secretJSON string, ssSecret confModels.SecretServerEntry, kSecret *v1.Secret, kubeSecret confModels.KubeSecret) {
 	var m map[string]any
 	err := json.Unmarshal([]byte(secretJSON), &m)
 	if err != nil {
@@ -147,7 +147,7 @@ func doSecretMapping(secretJSON string, ssSecret confModels.SecretServerSecret, 
 	}
 }
 
-func getToken(ssSecret confModels.SecretServerSecret) (string, error) {
+func getToken(ssSecret confModels.SecretServerEntry) (string, error) {
 	client := &http.Client{}
 	form := url.Values{}
 	form.Add("user", ssSecret.ServiceAccount)

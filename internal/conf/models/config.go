@@ -1,17 +1,17 @@
 package models
 
 type Config struct {
-	KubeAPI          KubeAPI      `yaml:"kube-api"`
-	SecretServer     SecretServer `yaml:"secret-server"`
-	MonitoredSecrets []KubeSecret `yaml:"monitored-secrets"`
+	KubeAPI          KubeAPI         `yaml:"kube-api"`
+	SecretServer     SecretServerAPI `yaml:"secret-server"`
+	MonitoredSecrets []KubeSecret    `yaml:"monitored-secrets"`
 }
-type SecretServer struct {
+type SecretServerAPI struct {
 	TokenURL string `yaml:"tokenUrl"`
 	BaseURL  string `yaml:"baseUrl"`
 }
-type SecretServerSecret struct {
+type SecretServerEntry struct {
 	ServiceAccount        string                 `yaml:"serviceAccount"`
-	Password              string                 `yaml:"Password"`
+	Password              string                 `yaml:"password"`
 	SecretURLPath         string                 `yaml:"secretUrlPath"`
 	FieldPropertyMappings []FieldPropertyMapping `yaml:"fieldPropertyMappings`
 }
@@ -24,6 +24,7 @@ type KubeAPI struct {
 	URL            string `yaml:"url"`
 }
 type KubeSecret struct {
-	KubernetesSecretName string               `yaml:"kubeSecretName"`
-	SecretServerSecret   []SecretServerSecret `yaml:"secretServer"`
+	Name                 string              `yaml:"name"`
+	KubernetesSecretName string              `yaml:"kubeSecretName"`
+	SecretServerEntry    []SecretServerEntry `yaml:"secretServer"`
 }
