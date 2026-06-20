@@ -23,6 +23,5 @@ monitored-secrets:
         fieldPropertyMappings:
           - fieldName: "jsonpathentry.nextentry.password" # The JSON structure down to the field you want to retrieve from SecretServer
             kubeSecretPropertyName: "DATABASE_PASSWORD" # The property name in the kubernetes secret data field.
-
     
 ```
