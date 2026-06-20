@@ -22,5 +22,5 @@ func main() {
 		log.Printf("failed syncing secrets completely")
 		return
 	}
-	log.Printf("secrets synced successfuly")
+	log.Printf("secrets synced successfully")
 }
