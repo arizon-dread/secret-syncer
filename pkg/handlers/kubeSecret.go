@@ -42,14 +42,19 @@ func SyncMonitoredSecrets() error {
 		noOfGoRoutines++
 		go updateKubeSecret(v, ch, wg)
 	}
-
+	finishedGoRoutines := 0
 	for res := range ch {
 		if res.Err != nil {
 			close(ch)
 			return res.Err
 		}
+		finishedGoRoutines++
+		if finishedGoRoutines == noOfGoRoutines {
+			break
+		}
 	}
 	wg.Wait()
+	close(ch)
 	return nil
 }
 
