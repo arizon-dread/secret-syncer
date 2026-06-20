@@ -8,8 +8,7 @@ RUN apk update && apk add --no-cache git
 RUN go build -v -o /usr/local/bin/secret-syncer/ ./...
 
 
-#FROM dhi.io/alpine-base:3.23 AS final
-FROM docker.io/debian:latest
+FROM dhi.io/alpine-base:3.23 AS final
 WORKDIR /go/bin
 ARG VERSION
 ENV GENERAL_VERSION=${VERSION}
