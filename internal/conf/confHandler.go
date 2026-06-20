@@ -6,7 +6,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/arizon-dread/secret-syncer/internal/conf/models"
+	"github.com/arizon-dread/secret-syncer/pkg/models"
 	"github.com/spf13/viper"
 )
 

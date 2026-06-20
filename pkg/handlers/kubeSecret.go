@@ -15,8 +15,7 @@ import (
 	"sync"
 
 	"github.com/arizon-dread/secret-syncer/internal/conf"
-	confModels "github.com/arizon-dread/secret-syncer/internal/conf/models"
-	models "github.com/arizon-dread/secret-syncer/pkg/models"
+	"github.com/arizon-dread/secret-syncer/pkg/models"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -24,7 +23,7 @@ import (
 )
 
 var (
-	config    *confModels.Config
+	config    *models.Config
 	clientSet *kubernetes.Clientset
 	namespace string
 )
@@ -54,7 +53,7 @@ func SyncMonitoredSecrets() error {
 	return nil
 }
 
-func updateKubeSecret(kubeSecret confModels.KubeSecret, ch chan models.Result, wg *sync.WaitGroup) {
+func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result, wg *sync.WaitGroup) {
 	defer wg.Done()
 	clusterConf, err := rest.InClusterConfig()
 	if err != nil {
@@ -88,7 +87,7 @@ func updateKubeSecret(kubeSecret confModels.KubeSecret, ch chan models.Result, w
 	}
 }
 
-func getSecretServerSecret(ssSecret confModels.SecretServerEntry) (string, error) {
+func getSecretServerSecret(ssSecret models.SecretServerEntry) (string, error) {
 	token, err := getToken(ssSecret)
 	if err != nil {
 		log.Printf("failed to get token from SecretServer, %v", err)
@@ -114,7 +113,7 @@ func getSecretServerSecret(ssSecret confModels.SecretServerEntry) (string, error
 	return string(body), nil
 }
 
-func doSecretMapping(secretJSON string, ssSecret confModels.SecretServerEntry, kSecret *v1.Secret, kubeSecret confModels.KubeSecret) {
+func doSecretMapping(secretJSON string, ssSecret models.SecretServerEntry, kSecret *v1.Secret, kubeSecret models.KubeSecret) {
 	var m map[string]any
 	err := json.Unmarshal([]byte(secretJSON), &m)
 	if err != nil {
@@ -147,7 +146,7 @@ func doSecretMapping(secretJSON string, ssSecret confModels.SecretServerEntry, k
 	}
 }
 
-func getToken(ssSecret confModels.SecretServerEntry) (string, error) {
+func getToken(ssSecret models.SecretServerEntry) (string, error) {
 	client := &http.Client{}
 	form := url.Values{}
 	form.Add("user", ssSecret.ServiceAccount)
