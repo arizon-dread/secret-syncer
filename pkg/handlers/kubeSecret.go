@@ -131,11 +131,9 @@ func doSecretMapping(secretJSON string, ssSecret models.SecretServerEntry, kSecr
 		if exists {
 			decodedValue, err = base64.StdEncoding.DecodeString(string(secretValue))
 			if err != nil {
-				log.Printf("Failed to decode secret value, err", err)
+				log.Printf("Failed to decode secret value, %v", err)
 				continue
 			}
-		} else {
-			kSecret.Data[v.KubeSecretPropertyName] = decodedValue
 		}
 		ssValue, exists := m[v.FieldPath].(string)
 		if exists {
