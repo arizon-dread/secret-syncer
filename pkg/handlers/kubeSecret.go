@@ -127,25 +127,32 @@ func doSecretMapping(secretJSON string, ssSecret models.SecretServerEntry, kSecr
 	}
 	for _, v := range ssSecret.FieldPropertyMappings {
 		secretValue, exists := kSecret.Data[v.KubeSecretPropertyName]
+		var decodedValue []byte
 		if exists {
-			decodedValue, err := base64.StdEncoding.DecodeString(string(secretValue))
+			decodedValue, err = base64.StdEncoding.DecodeString(string(secretValue))
 			if err != nil {
 				log.Printf("Failed to decode secret value, err", err)
 				continue
 			}
-			ssValue, exists := m[v.FieldPath].(string)
-			if exists {
-				if string(decodedValue) == ssValue {
-					log.Printf("secret %v property %v is up-to-date", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
-				} else {
-					kSecret.Data[v.KubeSecretPropertyName] = []byte(ssValue)
-					_, err = clientSet.CoreV1().Secrets(namespace).Update(context.TODO(), kSecret, metav1.UpdateOptions{})
-					if err != nil {
-						log.Printf("error updating secret %v, err. %v", kubeSecret.KubernetesSecretName, err)
-						return
-					}
-					log.Printf("updated secret %v successfully", kubeSecret.KubernetesSecretName)
+		} else {
+			kSecret.Data[v.KubeSecretPropertyName] = decodedValue
+		}
+		ssValue, exists := m[v.FieldPath].(string)
+		if exists {
+			if string(decodedValue) == ssValue {
+				log.Printf("secret %v property %v is up-to-date", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
+			} else if ssValue != "" {
+				var bVal []byte
+				base64.StdEncoding.Encode(bVal, []byte(ssValue))
+				kSecret.Data[v.KubeSecretPropertyName] = bVal
+				_, err = clientSet.CoreV1().Secrets(namespace).Update(context.TODO(), kSecret, metav1.UpdateOptions{})
+				if err != nil {
+					log.Printf("error updating secret %v, err. %v", kubeSecret.KubernetesSecretName, err)
+					return
 				}
+				log.Printf("updated secret %v property %v successfully", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
+			} else {
+				log.Printf("the value in SecretServer seems to be empty, will not overwrite kubernetes secret")
 			}
 		}
 	}
