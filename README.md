@@ -12,7 +12,7 @@ kube-api:
   url: https://kubernetes.default.svc
 secret-server:
   tokenURL: https://secret-server.local/api/token
-  baseURL: https://secret-server.local/api/v1/
+  baseURL: https://secret-server.local/api/v1
 monitored-secrets:
   - name: "creds"
     kubeSecretName: "credentials"
