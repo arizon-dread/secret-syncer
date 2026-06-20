@@ -8,7 +8,7 @@ Example yaml:
 
 ```yaml
 kube-api:
-  ServiceAccount: default
+  serviceAccount: default
   url: https://kubernetes.default.svc
 secret-server:
   tokenURL: https://secret-server.local/api/token
