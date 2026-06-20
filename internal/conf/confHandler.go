@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -10,16 +11,14 @@ import (
 )
 
 var (
-	config *models.Config
-	once   sync.Once
+	config  *models.Config
+	once    sync.Once
+	initErr error
 )
 
-// GetConfig reads the config once from disk and env vars and then returns it.
+// GetConfig reads the config once from disk, reads env vars and then returns the Config instance.
 // If already read, the read instance is returned immediately
-func GetConfig() *models.Config {
-	if config != nil {
-		return config
-	}
+func GetConfig() (*models.Config, error) {
 	once.Do(func() {
 		configPath := os.Getenv("configPath")
 		if configPath == "" {
@@ -29,7 +28,7 @@ func GetConfig() *models.Config {
 
 		v.SetConfigName("config")
 		v.AddConfigPath(configPath)
-		err := viper.ReadInConfig()
+		err := v.ReadInConfig()
 		if err != nil {
 			log.Printf("unable to read configFile")
 		}
@@ -39,8 +38,11 @@ func GetConfig() *models.Config {
 		config = &models.Config{}
 		err = v.Unmarshal(config)
 		if err != nil {
-			panic("unable to unmarshal config into go struct, quitting")
+			initErr = fmt.Errorf("unable to unmarshal config into go struct, quitting")
+		}
+		if config.SecretServer.BaseURL == "" {
+			initErr = fmt.Errorf("secret server baseURL was not set, please set the config variables to run secret-syncer")
 		}
 	})
-	return config
+	return config, initErr
 }
