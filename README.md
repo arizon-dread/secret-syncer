@@ -4,7 +4,7 @@ A go app, meant to be run as a cronjob in kubernetes that syncs secrets from Sec
 
 ## Configuration
 
-Example yaml:
+Example config yaml:
 
 ```yaml
 kube-api:
@@ -19,9 +19,9 @@ monitored-secrets:
     secretServer:
       - serviceAccount: "secret-server-account-name"
         password: "S3cr3tP455w0rd" # Can be set with the env var MONITORED_SECRETS_CREDS_SECRET_SERVER_PASSWORD in this example
+        grantType: password # This is the grant_type for the token retrieval.
         secretUrlPath: "/secret/123"
         fieldPropertyMappings:
-          - fieldName: "jsonpathentry.nextentry.password" # The JSON structure down to the field you want to retrieve from SecretServer
+          - fieldName: "Password" # The item.fieldName you want to retrieve the fieldValue from in the SecretServer secret
             kubeSecretPropertyName: "DATABASE_PASSWORD" # The property name in the kubernetes secret data field.
-    
 ```

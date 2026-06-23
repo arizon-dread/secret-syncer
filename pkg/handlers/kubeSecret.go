@@ -82,21 +82,27 @@ func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result, wg *s
 
 	for _, s := range kubeSecret.SecretServerEntry {
 
-		secretJSON, err := getSecretServerSecret(s)
+		ssResp, err := getSecretServerSecret(s)
 		if err != nil {
 			log.Printf("error getting secret from secret server, trying next in config")
 			continue
 		}
-		doSecretMapping(secretJSON, s, kSecret, kubeSecret)
+		doSecretMapping(ssResp, s, kSecret, kubeSecret)
 		ch <- models.Result{Err: nil}
 	}
+	_, err = clientSet.CoreV1().Secrets(namespace).Update(context.TODO(), kSecret, metav1.UpdateOptions{})
+	if err != nil {
+		log.Printf("error updating secret %v, err. %v", kubeSecret.KubernetesSecretName, err)
+		return
+	}
+	log.Printf("updated secret %v successfully", kubeSecret.KubernetesSecretName)
 }
 
-func getSecretServerSecret(ssSecret models.SecretServerEntry) (string, error) {
+func getSecretServerSecret(ssSecret models.SecretServerEntry) (*models.SecretServerResponse, error) {
 	token, err := getToken(ssSecret)
 	if err != nil {
 		log.Printf("failed to get token from SecretServer, %v", err)
-		return "", err
+		return nil, err
 	}
 	client := &http.Client{}
 	path := path.Join(config.SecretServer.BaseURL, ssSecret.SecretURLPath)
@@ -113,21 +119,18 @@ func getSecretServerSecret(ssSecret models.SecretServerEntry) (string, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Printf("unable to read body, %v", err)
-		return "", err
+		return nil, err
 	}
-	return string(body), nil
+	var ssResp *models.SecretServerResponse
+	err = json.Unmarshal(body, &ssResp)
+	return ssResp, nil
 }
 
-func doSecretMapping(secretJSON string, ssSecret models.SecretServerEntry, kSecret *v1.Secret, kubeSecret models.KubeSecret) {
-	var m map[string]any
-	err := json.Unmarshal([]byte(secretJSON), &m)
-	if err != nil {
-		log.Printf("unable to marshal secret server response json into generic map, %v", err)
-		return
-	}
+func doSecretMapping(ssResp *models.SecretServerResponse, ssSecret models.SecretServerEntry, kSecret *v1.Secret, kubeSecret models.KubeSecret) {
 	for _, v := range ssSecret.FieldPropertyMappings {
 		secretValue, exists := kSecret.Data[v.KubeSecretPropertyName]
 		var decodedValue []byte
+		var err error
 		if exists {
 			decodedValue, err = base64.StdEncoding.DecodeString(string(secretValue))
 			if err != nil {
@@ -135,23 +138,20 @@ func doSecretMapping(secretJSON string, ssSecret models.SecretServerEntry, kSecr
 				continue
 			}
 		}
-		ssValue, exists := m[v.FieldPath].(string)
-		if exists {
-			if string(decodedValue) == ssValue {
-				log.Printf("secret %v property %v is up-to-date", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
-			} else if ssValue != "" {
-				var bVal []byte
-				base64.StdEncoding.Encode(bVal, []byte(ssValue))
-				kSecret.Data[v.KubeSecretPropertyName] = bVal
-				_, err = clientSet.CoreV1().Secrets(namespace).Update(context.TODO(), kSecret, metav1.UpdateOptions{})
-				if err != nil {
-					log.Printf("error updating secret %v, err. %v", kubeSecret.KubernetesSecretName, err)
-					return
-				}
-				log.Printf("updated secret %v property %v successfully", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
-			} else {
-				log.Printf("the value in SecretServer seems to be empty, will not overwrite kubernetes secret")
+		var ssValue string
+		for _, item := range ssResp.Items {
+			if item.FieldName == v.FieldName {
+				ssValue = item.ItemValue
 			}
+		}
+		if string(decodedValue) == ssValue {
+			log.Printf("secret %v property %v is up-to-date", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
+		} else if ssValue != "" {
+			var bVal []byte
+			base64.StdEncoding.Encode(bVal, []byte(ssValue))
+			kSecret.Data[v.KubeSecretPropertyName] = bVal
+		} else {
+			log.Printf("the value in SecretServer seems to be empty, will not overwrite kubernetes secret")
 		}
 	}
 }
@@ -159,9 +159,9 @@ func doSecretMapping(secretJSON string, ssSecret models.SecretServerEntry, kSecr
 func getToken(ssSecret models.SecretServerEntry) (string, error) {
 	client := &http.Client{}
 	form := url.Values{}
-	form.Add("user", ssSecret.ServiceAccount)
+	form.Add("username", ssSecret.ServiceAccount)
 	form.Add("password", ssSecret.Password)
-	// There's another value that needs to be set
+	form.Add("grant_type", ssSecret.GrantType)
 
 	req, err := http.NewRequest("POST", config.SecretServer.TokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
@@ -185,5 +185,6 @@ func getToken(ssSecret models.SecretServerEntry) (string, error) {
 		log.Printf("error unmarshalling token response into generic go struct, %v", err)
 	}
 	token := m["access_token"].(string)
+	log.Printf("access_token: %v", token[0:2])
 	return token, nil
 }

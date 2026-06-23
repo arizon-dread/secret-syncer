@@ -12,11 +12,12 @@ type SecretServerAPI struct {
 type SecretServerEntry struct {
 	ServiceAccount        string                 `yaml:"serviceAccount"`
 	Password              string                 `yaml:"password"`
+	GrantType             string                 `yaml:"grantType"`
 	SecretURLPath         string                 `yaml:"secretUrlPath"`
 	FieldPropertyMappings []FieldPropertyMapping `yaml:"fieldPropertyMappings`
 }
 type FieldPropertyMapping struct {
-	FieldPath              string `yaml:"fieldPath"`
+	FieldName              string `yaml:"fieldName"`
 	KubeSecretPropertyName string `yaml:"kubeSecretPropertyName"`
 }
 type KubeAPI struct {
