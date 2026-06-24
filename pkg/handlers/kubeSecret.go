@@ -130,6 +130,7 @@ func getSecretServerSecret(ssSecret models.SecretServerEntry) (*models.SecretSer
 	err = json.Unmarshal(body, &ssResp)
 	if err != nil {
 		log.Printf("unable to unmarshal response from secret server, %v", err)
+		return nil, err
 	}
 	if ssResp.Message != "" {
 		log.Printf("%v", ssResp.Message)
