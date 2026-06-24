@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -144,13 +143,10 @@ func doSecretMapping(ssResp *models.SecretServerResponse, ssSecret models.Secret
 			kSecret.Data = make(map[string][]byte)
 		}
 		secretValue, exists := kSecret.Data[v.KubeSecretPropertyName]
-		var decodedValue []byte
 		var err error
 		if exists {
-			decodedValue, err = base64.StdEncoding.DecodeString(string(secretValue))
 			if err != nil {
-				log.Printf("Failed to decode secret value, %v", err)
-				continue
+				log.Printf("failed to retrieve secret value, will create it %v", err)
 			}
 		}
 		var ssValue string
@@ -159,13 +155,15 @@ func doSecretMapping(ssResp *models.SecretServerResponse, ssSecret models.Secret
 				ssValue = item.ItemValue
 			}
 		}
-		if string(decodedValue) == ssValue && len(decodedValue) > 0 {
+		if string(secretValue) == ssValue && len(secretValue) > 0 {
 			log.Printf("secret %v property %v is up-to-date", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
 		} else if ssValue != "" {
-			src := []byte(ssValue)
-			bVal := make([]byte, base64.StdEncoding.EncodedLen(len(src)))
-			base64.StdEncoding.Encode(bVal, src)
-			kSecret.Data[v.KubeSecretPropertyName] = bVal
+			// src := []byte(ssValue)
+			// bVal := make([]byte, base64.StdEncoding.EncodedLen(len(src)))
+			// base64.StdEncoding.Encode(bVal, src)
+			// kSecret.Data[v.KubeSecretPropertyName] = bVal
+			kSecret.Data[v.KubeSecretPropertyName] = []byte(ssValue)
+			log.Printf("update secret %v property %v", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
 		} else {
 			log.Printf("the value in SecretServer seems to be empty, will not overwrite kubernetes secret")
 		}
@@ -201,6 +199,8 @@ func getToken(ssSecret models.SecretServerEntry) (string, error) {
 		log.Printf("error unmarshalling token response into generic go struct, %v", err)
 	}
 	token := m["access_token"].(string)
-	log.Printf("access_token: %v", token[0:2])
+	if len(token) > 0 {
+		log.Printf("access_token was successfully retrieved")
+	}
 	return token, nil
 }
