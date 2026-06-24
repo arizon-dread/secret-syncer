@@ -2,7 +2,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: handle-secrets
-  namespace: poolen-secret-syncer-tests
+  namespace: YOUR-NAMESPACE
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
