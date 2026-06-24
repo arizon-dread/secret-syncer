@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"strings"
 	"sync"
 
@@ -74,6 +73,10 @@ func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result, wg *s
 		log.Printf("unable to get secret %v, will create it", kubeSecret.KubernetesSecretName)
 		kSecret = &v1.Secret{}
 		kSecret.Name = kubeSecret.KubernetesSecretName
+		kSecret.ObjectMeta = metav1.ObjectMeta{
+			Name:      kubeSecret.KubernetesSecretName,
+			Namespace: namespace,
+		}
 		kSecret, err = clientSet.CoreV1().Secrets(namespace).Create(context.TODO(), kSecret, metav1.CreateOptions{})
 		if err != nil {
 			ch <- models.Result{Err: fmt.Errorf("unable to create secret, quitting, err : %v", err)}
@@ -105,12 +108,15 @@ func getSecretServerSecret(ssSecret models.SecretServerEntry) (*models.SecretSer
 		return nil, err
 	}
 	client := &http.Client{}
-	path := path.Join(config.SecretServer.BaseURL, ssSecret.SecretURLPath)
+	path, err := url.JoinPath(config.SecretServer.BaseURL, ssSecret.SecretURLPath)
+	if err != nil {
+		log.Printf("unable to create a url path based on baseURL and SecretURLPath")
+	}
 	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
 		log.Printf("failed to create request, %v", err)
 	}
-	req.Header.Add("Authorization", token)
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %v", token))
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("unable to get secret from %v, err: %v", path, err)
@@ -123,11 +129,20 @@ func getSecretServerSecret(ssSecret models.SecretServerEntry) (*models.SecretSer
 	}
 	var ssResp *models.SecretServerResponse
 	err = json.Unmarshal(body, &ssResp)
+	if err != nil {
+		log.Printf("unable to unmarshal response from secret server, %v", err)
+	}
+	if ssResp.Message != "" {
+		log.Printf("%v", ssResp.Message)
+	}
 	return ssResp, nil
 }
 
 func doSecretMapping(ssResp *models.SecretServerResponse, ssSecret models.SecretServerEntry, kSecret *v1.Secret, kubeSecret models.KubeSecret) {
 	for _, v := range ssSecret.FieldPropertyMappings {
+		if kSecret.Data == nil {
+			kSecret.Data = make(map[string][]byte)
+		}
 		secretValue, exists := kSecret.Data[v.KubeSecretPropertyName]
 		var decodedValue []byte
 		var err error
@@ -144,11 +159,12 @@ func doSecretMapping(ssResp *models.SecretServerResponse, ssSecret models.Secret
 				ssValue = item.ItemValue
 			}
 		}
-		if string(decodedValue) == ssValue {
+		if string(decodedValue) == ssValue && len(decodedValue) > 0 {
 			log.Printf("secret %v property %v is up-to-date", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
 		} else if ssValue != "" {
-			var bVal []byte
-			base64.StdEncoding.Encode(bVal, []byte(ssValue))
+			src := []byte(ssValue)
+			bVal := make([]byte, base64.StdEncoding.EncodedLen(len(src)))
+			base64.StdEncoding.Encode(bVal, src)
 			kSecret.Data[v.KubeSecretPropertyName] = bVal
 		} else {
 			log.Printf("the value in SecretServer seems to be empty, will not overwrite kubernetes secret")

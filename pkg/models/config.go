@@ -1,31 +1,31 @@
 package models
 
 type Config struct {
-	KubeAPI          KubeAPI         `yaml:"kube-api"`
-	SecretServer     SecretServerAPI `yaml:"secret-server"`
-	MonitoredSecrets []KubeSecret    `yaml:"monitored-secrets"`
+	KubeAPI          KubeAPI         `mapstructure:"kube-api"`
+	SecretServer     SecretServerAPI `mapstructure:"secret-server"`
+	MonitoredSecrets []KubeSecret    `mapstructure:"monitored-secrets"`
 }
 type SecretServerAPI struct {
-	TokenURL string `yaml:"tokenUrl"`
-	BaseURL  string `yaml:"baseUrl"`
+	TokenURL string `mapstructure:"tokenUrl"`
+	BaseURL  string `mapstructure:"baseUrl"`
 }
 type SecretServerEntry struct {
-	ServiceAccount        string                 `yaml:"serviceAccount"`
-	Password              string                 `yaml:"password"`
-	GrantType             string                 `yaml:"grantType"`
-	SecretURLPath         string                 `yaml:"secretUrlPath"`
-	FieldPropertyMappings []FieldPropertyMapping `yaml:"fieldPropertyMappings`
+	ServiceAccount        string                 `mapstructure:"serviceAccount"`
+	Password              string                 `mapstructure:"password"`
+	GrantType             string                 `mapstructure:"grantType"`
+	SecretURLPath         string                 `mapstructure:"secretUrlPath"`
+	FieldPropertyMappings []FieldPropertyMapping `mapstructure:"fieldPropertyMappings"`
 }
 type FieldPropertyMapping struct {
-	FieldName              string `yaml:"fieldName"`
-	KubeSecretPropertyName string `yaml:"kubeSecretPropertyName"`
+	FieldName              string `mapstructure:"fieldName"`
+	KubeSecretPropertyName string `mapstructure:"kubeSecretPropertyName"`
 }
 type KubeAPI struct {
-	ServiceAccount string `yaml:"serviceAccount"`
-	URL            string `yaml:"url"`
+	ServiceAccount string `mapstructure:"serviceAccount"`
+	URL            string `mapstructure:"url"`
 }
 type KubeSecret struct {
-	Name                 string              `yaml:"name"`
-	KubernetesSecretName string              `yaml:"kubeSecretName"`
-	SecretServerEntry    []SecretServerEntry `yaml:"secretServer"`
+	Name                 string              `mapstructure:"name"`
+	KubernetesSecretName string              `mapstructure:"kubeSecretName"`
+	SecretServerEntry    []SecretServerEntry `mapstructure:"secretServer"`
 }

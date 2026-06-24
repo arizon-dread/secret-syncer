@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/arizon-dread/secret-syncer/pkg/models"
@@ -26,14 +27,18 @@ func GetConfig() (*models.Config, error) {
 		}
 		v := viper.New()
 		v.SetConfigName("config")
+		v.SetConfigType("yaml")
 		v.AddConfigPath(configPath)
 		err := v.ReadInConfig()
 		if err != nil {
 			log.Printf("unable to read configFile")
 		}
-
+		v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 		v.AutomaticEnv()
-
+		for _, key := range v.AllKeys() {
+			val := v.Get(key)
+			v.Set(key, val)
+		}
 		config = &models.Config{}
 		err = v.Unmarshal(config)
 		if err != nil {

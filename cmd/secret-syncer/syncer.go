@@ -19,7 +19,7 @@ func main() {
 	log.Printf("syncing secrets")
 	err = handlers.SyncMonitoredSecrets()
 	if err != nil {
-		log.Printf("failed syncing secrets completely")
+		log.Printf("failed syncing secrets completely, %v", err)
 		return
 	}
 	log.Printf("secrets synced successfully")

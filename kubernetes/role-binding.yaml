@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: handle-secrets-binding
+  namespace: YOUR-NAMESPACE
+subjects:
+  - kind: ServiceAccount
+    name: syncer
+    namespace: YOUR-NAMESPACE
+roleRef:
+  kind: Role
+  name: handle-secrets
+  apiGroup: rbac.authorization.k8s.io

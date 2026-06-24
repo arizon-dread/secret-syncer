@@ -56,4 +56,5 @@ type SecretServerResponse struct {
 	SecretTemplateName                 string `json:"secretTemplateName"`
 	ResponseCodes                      []any  `json:"responseCodes"`
 	WebLauncherRequiresIncognitoMode   bool   `json:"webLauncherRequiresIncognitoMode"`
+	Message                            string `json:"message"`
 }

@@ -17,6 +17,7 @@ spec:
               volumeMounts:
                 - name: sync-config
                   mountPath: /etc/sync
+              serviceAccountName: syncer
           restartPolicy: OnFailure
           volumes:
             - name: config

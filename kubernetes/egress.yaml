@@ -1,0 +1,24 @@
+apiVersion: k8s.ovn.org/v1
+kind: EgressFirewall
+metadata:
+  name: default
+spec:
+  egress:
+    - to:
+        nodeSelector:
+          matchLabels:
+            node-role.kubernetes.io/master: ""
+      type: Allow
+    - to:
+        dnsName: secretserver.internal.com
+      type: Allow
+    - to:
+        cidrSelector: 10.0.0.0/8
+      type: Deny
+    - to:
+        cidrSelector: 172.16.0.0/12
+      type: Deny
+    - to:
+        cidrSelector: 192.168.0.0/16
+      type: Deny
+status: {}
