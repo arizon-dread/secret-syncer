@@ -28,5 +28,5 @@ monitored-secrets:
 
 ## Kubernetes manifests
 
-Please see the [kubernetes](./kubernetes/) folder for an example deployment.
+Please see the [kubernetes](./kubernetes/) folder for an example deployment.  
 Note: The serviceAccount needs to have a role and rolebinding that allows for it to read and update secrets in the namespace where it's running. It would be reasonable to not use the same serviceAccount for a pod that is exposed outside the namespace.
