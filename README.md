@@ -8,7 +8,7 @@ Example config yaml:
 
 ```yaml
 kube-api:
-  serviceAccount: default
+  serviceAccount: syncer
   url: https://kubernetes.default.svc
 secret-server:
   tokenURL: https://secret-server.local/api/token
@@ -25,3 +25,8 @@ monitored-secrets:
           - fieldName: "Password" # The item.fieldName you want to retrieve the fieldValue from in the SecretServer secret
             kubeSecretPropertyName: "DATABASE_PASSWORD" # The property name in the kubernetes secret data field.
 ```
+
+## Kubernetes manifests
+
+Please see the [kubernetes](./kubernetes/) folder for an example deployment.
+Note: The serviceAccount needs to have a role and rolebinding that allows for it to read and update secrets in the namespace where it's running. It would be reasonable to not use the same serviceAccount for a pod that is exposed outside the namespace.
