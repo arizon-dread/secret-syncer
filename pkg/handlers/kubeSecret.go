@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 
 	"github.com/arizon-dread/secret-syncer/internal/conf"
 	"github.com/arizon-dread/secret-syncer/pkg/models"
@@ -30,34 +29,23 @@ func SyncMonitoredSecrets() error {
 	var err error
 	config, err = conf.GetConfig()
 	if err != nil {
-		log.Fatalf("unable to get config, %v", err)
+		return fmt.Errorf("unable to get config, %v", err)
 	}
-	wg := &sync.WaitGroup{}
+	noOfGoRoutines := len(config.MonitoredSecrets)
 	ch := make(chan models.Result)
-	noOfGoRoutines := 0
 	for _, v := range config.MonitoredSecrets {
-		wg.Add(1)
-		noOfGoRoutines++
-		go updateKubeSecret(v, ch, wg)
+		go updateKubeSecret(v, ch)
 	}
-	finishedGoRoutines := 0
-	for res := range ch {
+	for i := 0; i < noOfGoRoutines; i++ {
+		res := <-ch
 		if res.Err != nil {
-			close(ch)
 			return res.Err
 		}
-		finishedGoRoutines++
-		if finishedGoRoutines == noOfGoRoutines {
-			break
-		}
 	}
-	wg.Wait()
-	close(ch)
 	return nil
 }
 
-func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result, wg *sync.WaitGroup) {
-	defer wg.Done()
+func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result) {
 	clusterConf, err := rest.InClusterConfig()
 	if err != nil {
 		ch <- models.Result{Err: fmt.Errorf("failed to get cluster config, will not be able to see or touch secrets, quitting, err: %v", err)}
