@@ -78,7 +78,6 @@ func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result) {
 			continue
 		}
 		doSecretMapping(ssResp, s, kSecret, kubeSecret)
-		ch <- models.Result{Err: nil}
 	}
 	_, err = clientSet.CoreV1().Secrets(namespace).Update(context.TODO(), kSecret, metav1.UpdateOptions{})
 	if err != nil {
@@ -86,6 +85,7 @@ func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result) {
 		return
 	}
 	log.Printf("updated secret %v successfully", kubeSecret.KubernetesSecretName)
+	ch <- models.Result{Err: nil}
 }
 
 func getSecretServerSecret(ssSecret models.SecretServerEntry) (*models.SecretServerResponse, error) {
