@@ -65,7 +65,7 @@ func SyncMonitoredSecrets() error {
 func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result) {
 	clusterConf, err := rest.InClusterConfig()
 	if err != nil {
-		ch <- models.Result{Err: fmt.Errorf("failed to get cluster config, will not be able to see or touch secrets, quitting, err: %v", err)}
+		ch <- models.Result{Err: fmt.Errorf("failed to get cluster config, will not be able to see or touch secrets, err: %v", err)}
 	}
 	clientSet, err = kubernetes.NewForConfig(clusterConf)
 	if err != nil {
@@ -91,6 +91,11 @@ func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result) {
 
 		ssResp, err := getSecretServerSecret(s)
 		if err != nil {
+			if strings.Contains(err.Error(), "i/o timeout") {
+				err = fmt.Errorf("%v, is egressFirewall configured correctly and other network obstacles clear to reach Secret Server?", err)
+				ch <- models.Result{Err: err}
+				return
+			}
 			log.Printf("error getting secret from secret server, trying next in config")
 			continue
 		}
