@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/arizon-dread/secret-syncer/internal/conf"
 	"github.com/arizon-dread/secret-syncer/pkg/models"
@@ -25,6 +27,8 @@ var (
 	namespace string
 )
 
+// SyncMonitoredSecrets iterates over the config and calls funcs that reads from SecretServer and updates the kube secrets.
+// It tracks a channel that each call will return status on, returning a nillable error to the calling function.
 func SyncMonitoredSecrets() error {
 	var err error
 	config, err = conf.GetConfig()
@@ -33,18 +37,31 @@ func SyncMonitoredSecrets() error {
 	}
 	noOfGoRoutines := len(config.MonitoredSecrets)
 	ch := make(chan models.Result)
+	var wg sync.WaitGroup
 	for _, v := range config.MonitoredSecrets {
-		go updateKubeSecret(v, ch)
+		wg.Go(func() {
+			updateKubeSecret(v, ch)
+		})
 	}
-	for i := 0; i < noOfGoRoutines; i++ {
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+	var results []models.Result
+	for range noOfGoRoutines {
 		res := <-ch
 		if res.Err != nil {
-			return res.Err
+			results = append(results, res)
 		}
 	}
-	return nil
+	for _, res := range results {
+		err = errors.Join(err, res.Err)
+	}
+	return err
 }
 
+// updateKubeSecret makes sure the kubernetes secret exists, otherwise creates it, then calls SecretServer for each SecretServerEntry in the config.
+// Errors are written to the cannel if unable to call the the KubeAPI.
 func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result) {
 	clusterConf, err := rest.InClusterConfig()
 	if err != nil {
@@ -66,7 +83,7 @@ func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result) {
 		}
 		kSecret, err = clientSet.CoreV1().Secrets(namespace).Create(context.TODO(), kSecret, metav1.CreateOptions{})
 		if err != nil {
-			ch <- models.Result{Err: fmt.Errorf("unable to create secret, quitting, err : %v", err)}
+			ch <- models.Result{Err: fmt.Errorf("unable to create secret %v, quitting, err : %v", kSecret.Name, err)}
 		}
 	}
 
@@ -81,13 +98,14 @@ func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result) {
 	}
 	_, err = clientSet.CoreV1().Secrets(namespace).Update(context.TODO(), kSecret, metav1.UpdateOptions{})
 	if err != nil {
-		log.Printf("error updating secret %v, err. %v", kubeSecret.KubernetesSecretName, err)
+		ch <- models.Result{Err: fmt.Errorf("error updating secret %v, err. %v", kubeSecret.KubernetesSecretName, err)}
 		return
 	}
 	log.Printf("updated secret %v successfully", kubeSecret.KubernetesSecretName)
 	ch <- models.Result{Err: nil}
 }
 
+// getSecretServerSecret calls secretServer and returns the Unmarshalled secret and an error
 func getSecretServerSecret(ssSecret models.SecretServerEntry) (*models.SecretServerResponse, error) {
 	token, err := getToken(ssSecret)
 	if err != nil {
@@ -126,17 +144,15 @@ func getSecretServerSecret(ssSecret models.SecretServerEntry) (*models.SecretSer
 	return ssResp, nil
 }
 
+// doSecretMapping maps the SecretServer field to the kubernetes secret property
 func doSecretMapping(ssResp *models.SecretServerResponse, ssSecret models.SecretServerEntry, kSecret *v1.Secret, kubeSecret models.KubeSecret) {
 	for _, v := range ssSecret.FieldPropertyMappings {
 		if kSecret.Data == nil {
 			kSecret.Data = make(map[string][]byte)
 		}
 		secretValue, exists := kSecret.Data[v.KubeSecretPropertyName]
-		var err error
-		if exists {
-			if err != nil {
-				log.Printf("failed to retrieve secret value, will create it %v", err)
-			}
+		if !exists {
+			kSecret.Data[v.KubeSecretPropertyName] = []byte("")
 		}
 		var ssValue string
 		for _, item := range ssResp.Items {
@@ -147,10 +163,6 @@ func doSecretMapping(ssResp *models.SecretServerResponse, ssSecret models.Secret
 		if string(secretValue) == ssValue && len(secretValue) > 0 {
 			log.Printf("secret %v property %v is up-to-date", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
 		} else if ssValue != "" {
-			// src := []byte(ssValue)
-			// bVal := make([]byte, base64.StdEncoding.EncodedLen(len(src)))
-			// base64.StdEncoding.Encode(bVal, src)
-			// kSecret.Data[v.KubeSecretPropertyName] = bVal
 			kSecret.Data[v.KubeSecretPropertyName] = []byte(ssValue)
 			log.Printf("update secret %v property %v", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
 		} else {
@@ -159,6 +171,7 @@ func doSecretMapping(ssResp *models.SecretServerResponse, ssSecret models.Secret
 	}
 }
 
+// getToken retrieves an access_token from the SecretServer API
 func getToken(ssSecret models.SecretServerEntry) (string, error) {
 	client := &http.Client{}
 	form := url.Values{}

@@ -1,3 +1,4 @@
+// Package models contains structs for the application
 package models
 
 type Config struct {
