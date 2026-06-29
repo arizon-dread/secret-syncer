@@ -130,6 +130,7 @@ func getSecretServerSecret(ssSecret models.SecretServerEntry) (*models.SecretSer
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("unable to get secret from %v, err: %v", path, err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
