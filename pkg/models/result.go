@@ -1,5 +1,6 @@
 package models
 
 type Result struct {
-	Err error
+	Err     error
+	Success bool
 }
