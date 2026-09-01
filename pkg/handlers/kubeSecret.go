@@ -2,19 +2,18 @@ package handlers
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"strings"
 	"sync"
 
 	"github.com/arizon-dread/secret-syncer/internal/conf"
-	"github.com/arizon-dread/secret-syncer/internal/conf/models"
+	"github.com/arizon-dread/secret-syncer/pkg/models"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -22,112 +21,166 @@ import (
 )
 
 var (
-	config    *models.Config = conf.GetConfig()
+	config    *models.Config
 	clientSet *kubernetes.Clientset
 	namespace string
 )
 
-func GetMonitoredSecrets() {
-	wg := &sync.WaitGroup{}
-	for _, v := range config.MonitoredSecrets {
-		wg.Add(1)
-		updateKubeSecret(v, wg)
+// SyncMonitoredSecrets iterates over the config and calls funcs that reads from SecretServer and updates the kube secrets.
+// It tracks a channel that each call will return status on, returning a nillable error to the calling function.
+func SyncMonitoredSecrets() []models.Result {
+	var results []models.Result
+	config, err := conf.GetConfig()
+	if err != nil {
+		return append(results, models.Result{Err: fmt.Errorf("unable to get config, %v", err), Success: false})
 	}
-	wg.Wait()
+	noOfGoRoutines := len(config.MonitoredSecrets)
+	ch := make(chan models.Result)
+	var wg sync.WaitGroup
+	for _, v := range config.MonitoredSecrets {
+		wg.Go(func() {
+			updateKubeSecret(v, ch)
+		})
+	}
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+	for range noOfGoRoutines {
+		res := <-ch
+		if res.Err != nil {
+			results = append(results, res)
+		}
+	}
+	return results
 }
 
-func updateKubeSecret(kubeSecret models.KubeSecret, wg *sync.WaitGroup) {
-	defer wg.Done()
+// updateKubeSecret makes sure the kubernetes secret exists, otherwise creates it, then calls SecretServer for each SecretServerEntry in the config.
+// Errors are written to the cannel if unable to call the the KubeAPI.
+func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result) {
 	clusterConf, err := rest.InClusterConfig()
 	if err != nil {
-		log.Fatalf("failed to get cluster config, will not be able to see or touch secrets, quitting, err: %v", err)
+		ch <- models.Result{Err: fmt.Errorf("failed to get cluster config, will not be able to see or touch secrets, err: %v", err), Success: false}
 	}
 	clientSet, err = kubernetes.NewForConfig(clusterConf)
 	if err != nil {
-		log.Fatalf("failed to create kubernetes client, will not be able to see or touch secrets, quitting, err: %v", err)
+		ch <- models.Result{Err: fmt.Errorf("failed to create kubernetes client, will not be able to see or touch secrets, quitting, err: %v", err), Success: false}
 	}
 	namespace = os.Getenv("NAMESPACE")
 	kSecret, err := clientSet.CoreV1().Secrets(namespace).Get(context.TODO(), kubeSecret.KubernetesSecretName, metav1.GetOptions{})
 	if err != nil {
-		log.Printf("unable to get secret %v, got err: %v", kubeSecret.KubernetesSecretName, err)
+		log.Printf("unable to get secret %v, will create it", kubeSecret.KubernetesSecretName)
+		kSecret = &v1.Secret{}
+		kSecret.Name = kubeSecret.KubernetesSecretName
+		kSecret.ObjectMeta = metav1.ObjectMeta{
+			Name:      kubeSecret.KubernetesSecretName,
+			Namespace: namespace,
+		}
+		kSecret, err = clientSet.CoreV1().Secrets(namespace).Create(context.TODO(), kSecret, metav1.CreateOptions{})
+		if err != nil {
+			ch <- models.Result{Err: fmt.Errorf("unable to create secret %v, quitting, err : %v", kSecret.Name, err), Success: false}
+		}
+	}
+
+	for _, s := range kubeSecret.SecretServerEntry {
+
+		ssResp, err := getSecretServerSecret(s)
+		if err != nil || ssResp == nil {
+			if strings.Contains(err.Error(), "i/o timeout") {
+				err = fmt.Errorf("%v, is egressFirewall configured correctly and other network obstacles clear to reach Secret Server?", err)
+				ch <- models.Result{Err: err, Success: false}
+				return
+			}
+			log.Printf("error getting secret from secret server, trying next in config")
+			ch <- models.Result{Err: err, Success: false}
+			continue
+		}
+		doSecretMapping(ssResp, s, kSecret, kubeSecret)
+	}
+	_, err = clientSet.CoreV1().Secrets(namespace).Update(context.TODO(), kSecret, metav1.UpdateOptions{})
+	if err != nil {
+		ch <- models.Result{Err: fmt.Errorf("error updating secret %v, err. %v", kubeSecret.KubernetesSecretName, err), Success: false}
 		return
 	}
-
-	for _, s := range kubeSecret.SecretServerSecret {
-
-		secretJSON, err := getSecretServerSecret(s)
-		if err != nil {
-			return
-		}
-		doSecretMapping(secretJSON, s, kSecret, kubeSecret)
-
-	}
+	log.Printf("updated secret %v successfully", kubeSecret.KubernetesSecretName)
+	ch <- models.Result{Err: nil, Success: true}
 }
 
-func getSecretServerSecret(ssSecret models.SecretServerSecret) (string, error) {
+// getSecretServerSecret calls secretServer and returns the Unmarshalled secret and an error
+func getSecretServerSecret(ssSecret models.SecretServerEntry) (*models.SecretServerResponse, error) {
 	token, err := getToken(ssSecret)
 	if err != nil {
 		log.Printf("failed to get token from SecretServer, %v", err)
-		return "", err
+		return nil, err
 	}
 	client := &http.Client{}
-	path := path.Join(config.SecretServer.BaseURL, ssSecret.SecretURLPath)
+	path, err := url.JoinPath(config.SecretServer.BaseURL, ssSecret.SecretURLPath)
+	if err != nil {
+		log.Printf("unable to create a url path based on baseURL and SecretURLPath")
+	}
 	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
 		log.Printf("failed to create request, %v", err)
 	}
-	req.Header.Add("Authorization", token)
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %v", token))
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("unable to get secret from %v, err: %v", path, err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Printf("unable to read body, %v", err)
-		return "", err
+		return nil, err
 	}
-	return string(body), nil
+	var ssResp *models.SecretServerResponse
+	err = json.Unmarshal(body, &ssResp)
+	if err != nil {
+		log.Printf("unable to unmarshal response from secret server, %v", err)
+		return nil, err
+	}
+	if ssResp.Message != "" {
+		log.Printf("%v", ssResp.Message)
+	}
+	return ssResp, nil
 }
 
-func doSecretMapping(secretJSON string, ssSecret models.SecretServerSecret, kSecret *v1.Secret, kubeSecret models.KubeSecret) {
-	var m map[string]any
-	err := json.Unmarshal([]byte(secretJSON), &m)
-	if err != nil {
-		log.Printf("unable to marshal secret server response json into generic map, %v", err)
-		return
-	}
+// doSecretMapping maps the SecretServer field to the kubernetes secret property
+func doSecretMapping(ssResp *models.SecretServerResponse, ssSecret models.SecretServerEntry, kSecret *v1.Secret, kubeSecret models.KubeSecret) {
 	for _, v := range ssSecret.FieldPropertyMappings {
+		if kSecret.Data == nil {
+			kSecret.Data = make(map[string][]byte)
+		}
 		secretValue, exists := kSecret.Data[v.KubeSecretPropertyName]
-		if exists {
-			decodedValue, err := base64.StdEncoding.DecodeString(string(secretValue))
-			if err != nil {
-				log.Printf("Failed to decode secret value, err", err)
-				return
+		if !exists {
+			kSecret.Data[v.KubeSecretPropertyName] = []byte("")
+		}
+		var ssValue string
+		for _, item := range ssResp.Items {
+			if item.FieldName == v.FieldName {
+				ssValue = item.ItemValue
 			}
-			ssValue, exists := m[v.FieldPath].(string)
-			if exists {
-				if string(decodedValue) == ssValue {
-					log.Printf("secret %v property %v is up-to-date", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
-				} else {
-					kSecret.Data[v.KubeSecretPropertyName] = []byte(ssValue)
-					_, err = clientSet.CoreV1().Secrets(namespace).Update(context.TODO(), kSecret, metav1.UpdateOptions{})
-					if err != nil {
-						log.Printf("error updating secret %v, err. %v", kubeSecret.KubernetesSecretName, err)
-					}
-				}
-			}
+		}
+		if string(secretValue) == ssValue && len(secretValue) > 0 {
+			log.Printf("secret %v property %v is up-to-date", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
+		} else if ssValue != "" {
+			kSecret.Data[v.KubeSecretPropertyName] = []byte(ssValue)
+			log.Printf("update secret %v property %v", kubeSecret.KubernetesSecretName, v.KubeSecretPropertyName)
+		} else {
+			log.Printf("the value in SecretServer seems to be empty, will not overwrite kubernetes secret")
 		}
 	}
 }
 
-func getToken(ssSecret models.SecretServerSecret) (string, error) {
+// getToken retrieves an access_token from the SecretServer API
+func getToken(ssSecret models.SecretServerEntry) (string, error) {
 	client := &http.Client{}
 	form := url.Values{}
-	form.Add("user", ssSecret.ServiceAccount)
+	form.Add("username", ssSecret.ServiceAccount)
 	form.Add("password", ssSecret.Password)
-	// There's another value that needs to be set
-
+	form.Add("grant_type", ssSecret.GrantType)
+	config, err := conf.GetConfig()
 	req, err := http.NewRequest("POST", config.SecretServer.TokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		log.Printf("error creating token request, %v", err)
@@ -144,11 +197,24 @@ func getToken(ssSecret models.SecretServerSecret) (string, error) {
 		log.Printf("error reading response body, %v", err)
 		return "", err
 	}
-	var m map[string]any
+	m := make(map[string]any)
 	err = json.Unmarshal(body, &m)
-	if err != nil {
+	if err != nil || &m == nil {
 		log.Printf("error unmarshalling token response into generic go struct, %v", err)
+		if err == nil {
+			err = fmt.Errorf("generic struct is nil after unmarshal")
+		}
+		return "", err
 	}
+	if &m != nil && m["error"] != nil {
+		err = fmt.Errorf("%v", m["error"])
+		log.Printf("%v", err)
+		return "", err
+	}
+
 	token := m["access_token"].(string)
+	if len(token) > 0 {
+		log.Printf("access_token was successfully retrieved")
+	}
 	return token, nil
 }
