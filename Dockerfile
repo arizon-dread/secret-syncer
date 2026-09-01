@@ -1,7 +1,7 @@
 FROM docker.io/golang:1.26-alpine AS build
-LABEL MAINTAINER=github.com/arizon-dread
 
 WORKDIR /usr/local/go/src/github.com/arizon-dread/secret-syncer
+LABEL MAINTAINER=github.com/arizon-dread
 COPY . .
 
 RUN apk update && apk add --no-cache git
