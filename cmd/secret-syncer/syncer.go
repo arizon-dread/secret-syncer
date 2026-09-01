@@ -17,10 +17,21 @@ func main() {
 	}
 
 	log.Printf("syncing secrets")
-	err = handlers.SyncMonitoredSecrets()
-	if err != nil {
-		log.Printf("failed syncing secrets completely, %v", err)
-		return
+	results := handlers.SyncMonitoredSecrets()
+	success := 0
+	fail := 0
+	for _, res := range results {
+		if res.Success == true {
+			success++
+		} else {
+			fail++
+		}
 	}
-	log.Printf("secrets synced successfully")
+	if success == 0 {
+		log.Printf("failed syncing secrets completely, %v", err)
+	}
+	if fail == 0 {
+		log.Printf("secrets synced successfully")
+	}
+	log.Printf("Synced %d secret values successfully and failed to sync %d. Total values: %d", success, fail, len(results))
 }
