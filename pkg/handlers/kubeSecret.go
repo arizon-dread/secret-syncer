@@ -90,7 +90,7 @@ func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result) {
 	for _, s := range kubeSecret.SecretServerEntry {
 
 		ssResp, err := getSecretServerSecret(s)
-		if err != nil {
+		if err != nil || ssResp == nil {
 			if strings.Contains(err.Error(), "i/o timeout") {
 				err = fmt.Errorf("%v, is egressFirewall configured correctly and other network obstacles clear to reach Secret Server?", err)
 				ch <- models.Result{Err: err}
@@ -205,6 +205,7 @@ func getToken(ssSecret models.SecretServerEntry) (string, error) {
 	err = json.Unmarshal(body, &m)
 	if err != nil {
 		log.Printf("error unmarshalling token response into generic go struct, %v", err)
+		return "", err
 	}
 	token := m["access_token"].(string)
 	if len(token) > 0 {
