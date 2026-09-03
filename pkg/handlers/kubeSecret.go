@@ -34,7 +34,6 @@ func SyncMonitoredSecrets() []models.Result {
 	if err != nil {
 		return append(results, models.Result{Err: fmt.Errorf("unable to get config, %v", err), Success: false})
 	}
-	noOfGoRoutines := len(config.MonitoredSecrets)
 	ch := make(chan models.Result)
 	var wg sync.WaitGroup
 	for _, v := range config.MonitoredSecrets {
@@ -42,15 +41,14 @@ func SyncMonitoredSecrets() []models.Result {
 			updateKubeSecret(v, ch)
 		})
 	}
+	// Close the channel when all waitgroups have finished.
 	go func() {
 		wg.Wait()
 		close(ch)
 	}()
-	for range noOfGoRoutines {
-		res := <-ch
-		if res.Err != nil {
-			results = append(results, res)
-		}
+
+	for res := range ch {
+		results = append(results, res)
 	}
 	return results
 }
@@ -111,6 +109,11 @@ func getSecretServerSecret(ssSecret models.SecretServerEntry) (*models.SecretSer
 	token, err := getToken(ssSecret)
 	if err != nil {
 		log.Printf("failed to get token from SecretServer, %v", err)
+		return nil, err
+	}
+	config, err := conf.GetConfig()
+	if err != nil {
+		log.Printf("failed getting config, %v", err)
 		return nil, err
 	}
 	client := &http.Client{}
