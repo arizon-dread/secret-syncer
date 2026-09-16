@@ -33,5 +33,5 @@ func main() {
 	if fail == 0 {
 		log.Printf("secrets synced successfully")
 	}
-	log.Printf("Synced %d secret(s)  successfully and failed to sync %d. Total: %d", success, fail, len(results))
+	log.Printf("Synced %d secret(s) successfully and failed to sync %d. Total: %d", success, fail, len(results))
 }
