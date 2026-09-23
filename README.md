@@ -4,6 +4,10 @@ A go app, meant to be run as a CronJob in Kubernetes that syncs secrets from Sec
 Secret Server is treated as a single source of truth.  
 This app imports secrets directly from the source of truth into the runtime environment so no secrets needs to be added to the VCS.
 
+## Updates
+
+The config management and syntax has changed somewhat, `monitored-secrets` and `secretServer` has been changed from slices to maps. Please see the example below.  
+
 ## Configuration
 
 Example config yaml:
@@ -16,11 +20,12 @@ secret-server:
   tokenURL: https://secret-server.local/oauth2/token
   baseURL: https://secret-server.local/api/v1
 monitored-secrets:
-  - name: "creds"
+  creds:
     kubeSecretName: "credentials"
     secretServer:
-      - serviceAccount: "secret-server-account-name"
-        password: "S3cr3tP455w0rd" # Can be set with the env var MONITORED_SECRETS_CREDS_SECRET_SERVER_PASSWORD in this example
+      db:
+        serviceAccount: "secret-server-account-name"
+        password: "S3cr3tP455w0rd" # Can be set with the env var MONITORED_SECRETS_CREDS_SECRETSERVER_DB_PASSWORD in this example
         grantType: password # This is the grant_type for the token retrieval.
         secretUrlPath: "/secrets/123"
         fieldPropertyMappings:

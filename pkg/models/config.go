@@ -4,7 +4,7 @@ package models
 type Config struct {
 	KubeAPI          KubeAPI         `mapstructure:"kube-api"`
 	SecretServer     SecretServerAPI `mapstructure:"secret-server"`
-	MonitoredSecrets []KubeSecret    `mapstructure:"monitored-secrets"`
+	MonitoredSecrets map[string]KubeSecret    `mapstructure:"monitored-secrets"`
 }
 type SecretServerAPI struct {
 	TokenURL string `mapstructure:"tokenUrl"`
@@ -26,7 +26,6 @@ type KubeAPI struct {
 	URL            string `mapstructure:"url"`
 }
 type KubeSecret struct {
-	Name                 string              `mapstructure:"name"`
 	KubernetesSecretName string              `mapstructure:"kubeSecretName"`
-	SecretServerEntry    []SecretServerEntry `mapstructure:"secretServer"`
+	SecretServerEntry    map[string]SecretServerEntry `mapstructure:"secretServer"`
 }

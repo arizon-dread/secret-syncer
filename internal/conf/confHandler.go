@@ -33,8 +33,7 @@ func GetConfig() (*models.Config, error) {
 		if err != nil {
 			log.Printf("unable to read configFile")
 		}
-		v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-		v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+		v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 		v.AutomaticEnv()
 		for _, key := range v.AllKeys() {
 			val := v.Get(key)
@@ -43,7 +42,7 @@ func GetConfig() (*models.Config, error) {
 		config = &models.Config{}
 		err = v.Unmarshal(config)
 		if err != nil {
-			initErr = fmt.Errorf("unable to unmarshal config into go struct, quitting")
+			initErr = fmt.Errorf("unable to unmarshal config into go struct, quitting, %v", err)
 		}
 		if config.SecretServer.BaseURL == "" {
 			initErr = fmt.Errorf("secret server baseURL was not set, please set the config variables to run secret-syncer")
