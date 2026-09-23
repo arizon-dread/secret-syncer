@@ -34,6 +34,7 @@ func GetConfig() (*models.Config, error) {
 			log.Printf("unable to read configFile")
 		}
 		v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+		v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 		v.AutomaticEnv()
 		for _, key := range v.AllKeys() {
 			val := v.Get(key)
