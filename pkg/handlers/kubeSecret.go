@@ -66,7 +66,12 @@ func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result) {
 		ch <- models.Result{Err: fmt.Errorf("failed to create kubernetes client, will not be able to see or touch secrets, quitting, err: %v", err), Success: false}
 		return
 	}
-	namespace = os.Getenv("NAMESPACE")
+	ns, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	namespace := string(ns)
+	if err !=  nil {
+		ch <- models.Result{Err: fmt.Errorf("failed to get the current namespace, %v", err), Success: false}
+		return
+	}
 	kSecret, err := clientSet.CoreV1().Secrets(namespace).Get(context.TODO(), kubeSecret.KubernetesSecretName, metav1.GetOptions{})
 	if err != nil {
 		log.Printf("unable to get secret %v, will create it", kubeSecret.KubernetesSecretName)
