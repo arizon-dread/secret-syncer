@@ -59,10 +59,12 @@ func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result) {
 	clusterConf, err := rest.InClusterConfig()
 	if err != nil {
 		ch <- models.Result{Err: fmt.Errorf("failed to get cluster config, will not be able to see or touch secrets, err: %v", err), Success: false}
+		return
 	}
 	clientSet, err = kubernetes.NewForConfig(clusterConf)
 	if err != nil {
 		ch <- models.Result{Err: fmt.Errorf("failed to create kubernetes client, will not be able to see or touch secrets, quitting, err: %v", err), Success: false}
+		return
 	}
 	namespace = os.Getenv("NAMESPACE")
 	kSecret, err := clientSet.CoreV1().Secrets(namespace).Get(context.TODO(), kubeSecret.KubernetesSecretName, metav1.GetOptions{})
@@ -77,6 +79,7 @@ func updateKubeSecret(kubeSecret models.KubeSecret, ch chan models.Result) {
 		kSecret, err = clientSet.CoreV1().Secrets(namespace).Create(context.TODO(), kSecret, metav1.CreateOptions{})
 		if err != nil {
 			ch <- models.Result{Err: fmt.Errorf("unable to create secret %v, quitting, err : %v", kSecret.Name, err), Success: false}
+			return
 		}
 	}
 
