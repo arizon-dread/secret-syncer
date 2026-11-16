@@ -32,6 +32,7 @@ monitored-secrets:
           - fieldName: "Password" # The item.fieldName you want to retrieve the fieldValue from in the SecretServer secret
             kubeSecretPropertyName: "DATABASE_PASSWORD" # The property name in the kubernetes secret data field.
 ```
+You can rename `creds` and `db` in the example to your own descriptive names, that way, you can also add more entries on those levels to sync more secrets.  
 
 ## Kubernetes manifests
 
