@@ -1,7 +1,7 @@
 # secret-syncer
 
 A go app, meant to be run as a CronJob in Kubernetes that syncs secrets from Secret Server to Kubernetes secrets.  
-Secret Server is treated as a single source of truth.  
+Secret Server is treated as a single source of truth, with the exception that if you delete the secret or empty the fields, that will not sync into the kubernetes secret to avoid stopping an application from working based on the availability of SecretServer.  
 This app imports secrets directly from the source of truth into the runtime environment so no secrets needs to be added to the VCS.
 
 ## Updates
